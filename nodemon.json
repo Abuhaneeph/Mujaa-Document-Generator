@@ -1,0 +1,26 @@
+{
+  "watch": ["server.js", "App.js"],
+  "ignore": [
+    "temp/**/*",
+    "uploads/**/*",
+    "templates/**/*",
+    "data/**/*",
+    "*.pdf",
+    "*.docx",
+    "node_modules/**/*",
+    "*.log",
+    ".nodemon-disable",
+    "policy_number.json",
+    "kbl_policy_number.json",
+    "nsia_policy_number.json",
+    "*.json"
+  ],
+  "ext": "js",
+  "delay": 3000,
+  "env": {
+    "NODE_ENV": "development"
+  },
+  "verbose": false,
+  "restartable": "rs",
+  "signal": "SIGUSR2"
+}

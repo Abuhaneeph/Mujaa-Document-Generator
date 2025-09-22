@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mujaa Document Generator</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #eee;
+        }
+        .tab {
+            flex: 1;
+            padding: 15px 20px;
+            background: #f8f9fa;
+            border: none;
+            border-radius: 10px 10px 0 0;
+            margin-right: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .tab:hover {
+            background: #e9ecef;
+        }
+        .tab.active:hover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input, textarea, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s;
+        }
+        input:focus, textarea:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .form-row {
+            display: flex;
+            gap: 15px;
+        }
+        .form-row .form-group {
+            flex: 1;
+        }
+        .button-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+        button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+        }
+        .btn-warning {
+            background: linear-gradient(135deg, #ffc107 0%, #fd7e14 100%);
+            color: white;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background: #cce7ff;
+            color: #004085;
+            border: 1px solid #99d5ff;
+        }
+        .file-upload {
+            border: 2px dashed #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .file-upload:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        .file-upload.dragover {
+            border-color: #667eea;
+            background: #e3f2fd;
+        }
+        .uploaded-files {
+            margin-top: 15px;
+        }
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            margin-bottom: 10px;
+        }
+        .file-item .file-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .file-item .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .remove-file {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .document-order {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            background: #f8f9fa;
+        }
+        .order-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+        }
+        .order-item .drag-handle {
+            cursor: move;
+            margin-right: 10px;
+            color: #666;
+        }
+        .order-item .item-type {
+            background: #667eea;
+            color: white;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            margin-right: 10px;
+        }
+        .order-item .item-name {
+            flex: 1;
+        }
+        .order-item .item-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .add-document {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .remove-item {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .split-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .split-option input[type="checkbox"] {
+            width: auto;
+        }
+        .generated-docs {
+            background: #e8f5e8;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .generated-docs h4 {
+            margin: 0 0 10px 0;
+            color: #155724;
+        }
+        .generated-docs .doc-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 10px;
+        }
+        .generated-docs .doc-item {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #c3e6cb;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .generated-docs .doc-item:hover {
+            background: #d4edda;
+        }
+        .generated-docs .doc-item.selected {
+            background: #667eea;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🏢 Mujaa Document Generator</h1>
+        
+        <!-- Tab Navigation -->
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('basic')">📝 Basic Generation</button>
+            <button class="tab" onclick="switchTab('custom')">🎯 Custom Order</button>
+            <button class="tab" onclick="switchTab('upload')">📎 Upload & Split</button>
+            <button class="tab" onclick="switchTab('status')">🔍 Server Status</button>
+        </div>
+
+        <!-- Basic Generation Tab -->
+        <div id="basic" class="tab-content active">
+            <form id="basicForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="cv">CV (₦):</label>
+                        <input type="number" id="cv" name="cv" value="3000000" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label for="name">Full Name:</label>
+                        <input type="text" id="name" name="name" value="John Michael Doe" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="pensionCompany">Pension Company:</label>
+                        <input type="text" id="pensionCompany" name="pensionCompany" value="United Pensions Trust Ltd" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="pensionNo">Pension Number:</label>
+                        <input type="text" id="pensionNo" name="pensionNo" value="PEN-48291736" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="pensionCompanyAddress">Pension Company Address:</label>
+                    <textarea id="pensionCompanyAddress" name="pensionCompanyAddress" rows="2" required>45 Marina Road, Victoria Island, Lagos, Nigeria</textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="accountNo">Account Number:</label>
+                        <input type="text" id="accountNo" name="accountNo" value="0123456789" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dob">Date of Birth:</label>
+                        <input type="date" id="dob" name="dob" value="1985-06-15" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="address">Address:</label>
+                        <textarea id="address" name="address" rows="2" required>123 Main Street, Lagos, Nigeria</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="mortgageBank">Mortgage Bank:</label>
+                        <input type="text" id="mortgageBank" name="mortgageBank" value="First Bank of Nigeria" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="mortgageBankAddress">Mortgage Bank Address:</label>
+                    <textarea id="mortgageBankAddress" name="mortgageBankAddress" rows="2" required>35 Marina Road, Lagos Island, Lagos, Nigeria</textarea>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" class="btn-secondary" onclick="checkHealth()">Check Server</button>
+                    <button type="button" class="btn-warning" onclick="debugGenerate()">Test Debug</button>
+                    <button type="submit" class="btn-primary">Generate Documents</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Custom Order Tab -->
+        <div id="custom" class="tab-content">
+            <form id="customForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customCv">CV (₦):</label>
+                        <input type="number" id="customCv" name="cv" value="3000000" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label for="customName">Full Name:</label>
+                        <input type="text" id="customName" name="name" value="John Michael Doe" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customPensionCompany">Pension Company:</label>
+                        <input type="text" id="customPensionCompany" name="pensionCompany" value="United Pensions Trust Ltd" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="customPensionNo">Pension Number:</label>
+                        <input type="text" id="customPensionNo" name="pensionNo" value="PEN-48291736" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="customPensionCompanyAddress">Pension Company Address:</label>
+                    <textarea id="customPensionCompanyAddress" name="pensionCompanyAddress" rows="2" required>45 Marina Road, Victoria Island, Lagos, Nigeria</textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customAccountNo">Account Number:</label>
+                        <input type="text" id="customAccountNo" name="accountNo" value="0123456789" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="customDob">Date of Birth:</label>
+                        <input type="date" id="customDob" name="dob" value="1985-06-15" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="customAddress">Address:</label>
+                        <textarea id="customAddress" name="address" rows="2" required>123 Main Street, Lagos, Nigeria</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="customMortgageBank">Mortgage Bank:</label>
+                        <input type="text" id="customMortgageBank" name="mortgageBank" value="First Bank of Nigeria" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="customMortgageBankAddress">Mortgage Bank Address:</label>
+                    <textarea id="customMortgageBankAddress" name="mortgageBankAddress" rows="2" required>35 Marina Road, Lagos Island, Lagos, Nigeria</textarea>
+                </div>
+
+                <!-- Document Order Section -->
+                <div class="generated-docs">
+                    <h4>📋 Available Generated Documents</h4>
+                    <div class="doc-list" id="generatedDocsList">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <div class="document-order">
+                    <h4>📝 Document Order</h4>
+                    <div id="documentOrderList">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <button type="button" class="add-document" onclick="addDocumentToOrder()">+ Add Document</button>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-secondary" onclick="clearDocumentOrder()">Clear Order</button>
+                    <button type="submit" class="btn-success">Generate Custom Order</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Upload & Split Tab -->
+        <div id="upload" class="tab-content">
+            <form id="uploadForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="uploadCv">CV (₦):</label>
+                        <input type="number" id="uploadCv" name="cv" value="3000000" step="any">
+                    </div>
+                    <div class="form-group">
+                        <label for="uploadName">Full Name:</label>
+                        <input type="text" id="uploadName" name="name" value="John Michael Doe" required>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="uploadPensionCompany">Pension Company:</label>
+                        <input type="text" id="uploadPensionCompany" name="pensionCompany" value="United Pensions Trust Ltd" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="uploadPensionNo">Pension Number:</label>
+                        <input type="text" id="uploadPensionNo" name="pensionNo" value="PEN-48291736" required>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="uploadPensionCompanyAddress">Pension Company Address:</label>
+                    <textarea id="uploadPensionCompanyAddress" name="pensionCompanyAddress" rows="2" required>45 Marina Road, Victoria Island, Lagos, Nigeria</textarea>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="uploadAccountNo">Account Number:</label>
+                        <input type="text" id="uploadAccountNo" name="accountNo" value="0123456789" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="uploadDob">Date of Birth:</label>
+                        <input type="date" id="uploadDob" name="dob" value="1985-06-15" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="uploadAddress">Address:</label>
+                        <textarea id="uploadAddress" name="address" rows="2" required>123 Main Street, Lagos, Nigeria</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="uploadMortgageBank">Mortgage Bank:</label>
+                        <input type="text" id="uploadMortgageBank" name="mortgageBank" value="First Bank of Nigeria" required>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="uploadMortgageBankAddress">Mortgage Bank Address:</label>
+                    <textarea id="uploadMortgageBankAddress" name="mortgageBankAddress" rows="2" required>35 Marina Road, Lagos Island, Lagos, Nigeria</textarea>
+                </div>
+
+                <!-- File Upload Section -->
+                <div class="form-group">
+                    <label>📎 Upload Scanned Documents (PDF)</label>
+                    <div class="file-upload" id="fileUploadArea">
+                        <p>📁 Drag & drop PDF files here or click to browse</p>
+                        <input type="file" id="fileInput" multiple accept=".pdf" style="display: none;">
+                    </div>
+                    <div class="uploaded-files" id="uploadedFiles"></div>
+                </div>
+
+                <!-- Document Order Section -->
+                <div class="document-order">
+                    <h4>📝 Document Order (Including Uploaded Files)</h4>
+                    <div id="uploadDocumentOrderList">
+                        <!-- Will be populated by JavaScript -->
+                    </div>
+                    <button type="button" class="add-document" onclick="addUploadDocumentToOrder()">+ Add Document</button>
+                </div>
+
+                <div class="button-group">
+                    <button type="button" class="btn-secondary" onclick="clearUploadDocumentOrder()">Clear Order</button>
+                    <button type="submit" class="btn-success">Generate with Uploads</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Server Status Tab -->
+        <div id="status" class="tab-content">
+            <div class="button-group">
+                <button type="button" class="btn-primary" onclick="checkHealth()">Check Server Status</button>
+                <button type="button" class="btn-warning" onclick="debugGenerate()">Test Debug Generation</button>
+            </div>
+        </div>
+        
+        <div id="status" class="status"></div>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        
+        // Global state
+        let uploadedFiles = [];
+        let documentOrder = [];
+        let uploadDocumentOrder = [];
+        let generatedDocs = [
+            'confirmation_of_property_availability_processed',
+            'confirmation_of_property_title_processed',
+            'indemnity_processed',
+            'indicative_processed',
+            'kbl_insurance_processed',
+            'mujaa_offer_letter_processed',
+            'nsia_insurance_processed',
+            'readiness_processed',
+            'verification_processed'
+        ];
+
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Remove active class from all tabs
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName).classList.add('active');
+            
+            // Add active class to clicked tab
+            event.target.classList.add('active');
+            
+            // Initialize tab-specific content
+            if (tabName === 'custom') {
+                initializeCustomTab();
+            } else if (tabName === 'upload') {
+                initializeUploadTab();
+            }
+        }
+
+        function showStatus(message, type = 'info') {
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = message;
+        }
+
+        function hideStatus() {
+            statusDiv.style.display = 'none';
+        }
+
+        // Initialize custom tab
+        function initializeCustomTab() {
+            populateGeneratedDocsList();
+            updateDocumentOrderList();
+        }
+
+        // Initialize upload tab
+        function initializeUploadTab() {
+            populateGeneratedDocsList('upload');
+            updateUploadDocumentOrderList();
+            setupFileUpload();
+        }
+
+        // Populate generated docs list
+        function populateGeneratedDocsList(prefix = '') {
+            const container = document.getElementById(prefix ? 'generatedDocsList' : 'generatedDocsList');
+            container.innerHTML = '';
+            
+            generatedDocs.forEach(doc => {
+                const docItem = document.createElement('div');
+                docItem.className = 'doc-item';
+                docItem.textContent = doc.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                docItem.onclick = () => addGeneratedDocToOrder(doc, prefix);
+                container.appendChild(docItem);
+            });
+        }
+
+        // Add generated document to order
+        function addGeneratedDocToOrder(docName, prefix = '') {
+            const order = prefix ? uploadDocumentOrder : documentOrder;
+            order.push({
+                type: 'generated',
+                documentName: docName
+            });
+            
+            if (prefix) {
+                updateUploadDocumentOrderList();
+            } else {
+                updateDocumentOrderList();
+            }
+        }
+
+        // Update document order list
+        function updateDocumentOrderList() {
+            const container = document.getElementById('documentOrderList');
+            container.innerHTML = '';
+            
+            documentOrder.forEach((item, index) => {
+                const orderItem = document.createElement('div');
+                orderItem.className = 'order-item';
+                orderItem.innerHTML = `
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-type">${item.type}</span>
+                    <span class="item-name">${item.documentName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                    <div class="item-actions">
+                        <button class="remove-item" onclick="removeFromOrder(${index})">Remove</button>
+                    </div>
+                `;
+                container.appendChild(orderItem);
+            });
+        }
+
+        // Update upload document order list
+        function updateUploadDocumentOrderList() {
+            const container = document.getElementById('uploadDocumentOrderList');
+            container.innerHTML = '';
+            
+            uploadDocumentOrder.forEach((item, index) => {
+                const orderItem = document.createElement('div');
+                orderItem.className = 'order-item';
+                orderItem.innerHTML = `
+                    <span class="drag-handle">⋮⋮</span>
+                    <span class="item-type">${item.type}</span>
+                    <span class="item-name">${item.documentName.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                    <div class="item-actions">
+                        <button class="remove-item" onclick="removeFromUploadOrder(${index})">Remove</button>
+                    </div>
+                `;
+                container.appendChild(orderItem);
+            });
+        }
+
+        // Remove from order
+        function removeFromOrder(index) {
+            documentOrder.splice(index, 1);
+            updateDocumentOrderList();
+        }
+
+        // Remove from upload order
+        function removeFromUploadOrder(index) {
+            uploadDocumentOrder.splice(index, 1);
+            updateUploadDocumentOrderList();
+        }
+
+        // Clear document order
+        function clearDocumentOrder() {
+            documentOrder = [];
+            updateDocumentOrderList();
+        }
+
+        // Clear upload document order
+        function clearUploadDocumentOrder() {
+            uploadDocumentOrder = [];
+            updateUploadDocumentOrderList();
+        }
+
+        // Add document to order
+        function addDocumentToOrder() {
+            const docName = prompt('Enter document name (e.g., confirmation_of_property_availability_processed):');
+            if (docName) {
+                documentOrder.push({
+                    type: 'generated',
+                    documentName: docName
+                });
+                updateDocumentOrderList();
+            }
+        }
+
+        // Add upload document to order
+        function addUploadDocumentToOrder() {
+            const docName = prompt('Enter document name (generated doc name or uploaded file name):');
+            if (docName) {
+                uploadDocumentOrder.push({
+                    type: 'uploaded',
+                    documentName: docName
+                });
+                updateUploadDocumentOrderList();
+            }
+        }
+
+        // File upload setup
+        function setupFileUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const uploadArea = document.getElementById('fileUploadArea');
+            const uploadedFilesDiv = document.getElementById('uploadedFiles');
+
+            // Click to upload
+            uploadArea.addEventListener('click', () => fileInput.click());
+
+            // Drag and drop
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                handleFiles(e.dataTransfer.files);
+            });
+
+            // File input change
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+            });
+        }
+
+        // Handle uploaded files
+        async function handleFiles(files) {
+            for (let file of files) {
+                if (file.type === 'application/pdf') {
+                    const base64 = await fileToBase64(file);
+                    uploadedFiles.push({
+                        name: file.name,
+                        data: base64,
+                        splitIntoPages: false
+                    });
+                }
+            }
+            updateUploadedFilesList();
+        }
+
+        // Convert file to base64
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result.split(',')[1]);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        // Update uploaded files list
+        function updateUploadedFilesList() {
+            const container = document.getElementById('uploadedFiles');
+            container.innerHTML = '';
+            
+            uploadedFiles.forEach((file, index) => {
+                const fileItem = document.createElement('div');
+                fileItem.className = 'file-item';
+                fileItem.innerHTML = `
+                    <div class="file-info">
+                        <span>📄 ${file.name}</span>
+                        <div class="split-option">
+                            <input type="checkbox" id="split_${index}" ${file.splitIntoPages ? 'checked' : ''} 
+                                   onchange="toggleSplitOption(${index})">
+                            <label for="split_${index}">Split into pages</label>
+                        </div>
+                    </div>
+                    <div class="file-actions">
+                        <button class="remove-file" onclick="removeUploadedFile(${index})">Remove</button>
+                    </div>
+                `;
+                container.appendChild(fileItem);
+            });
+        }
+
+        // Toggle split option
+        function toggleSplitOption(index) {
+            uploadedFiles[index].splitIntoPages = !uploadedFiles[index].splitIntoPages;
+        }
+
+        // Remove uploaded file
+        function removeUploadedFile(index) {
+            uploadedFiles.splice(index, 1);
+            updateUploadedFilesList();
+        }
+
+        // Server health check
+        async function checkHealth() {
+            try {
+                showStatus('🔍 Checking server status...', 'info');
+                
+                const response = await fetch('http://localhost:3000/api/health');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    const available = data.availableTemplates.length;
+                    const missing = data.missingTemplates.length;
+                    
+                    let message = `✅ Server Status: ${data.status}<br>`;
+                    message += `📁 Templates Directory: ${data.templatesDirExists ? 'EXISTS' : 'MISSING'}<br>`;
+                    message += `📄 Available Templates: ${available}/9<br>`;
+                    
+                    if (missing > 0) {
+                        message += `❌ Missing Templates: ${data.missingTemplates.join(', ')}<br>`;
+                    }
+                    
+                    if (data.allFiles.length > 0) {
+                        message += `📋 All Files: ${data.allFiles.join(', ')}`;
+                    }
+                    
+                    showStatus(message, available === 9 ? 'success' : 'error');
+                } else {
+                    showStatus(`❌ Server Error: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Connection Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Debug generation
+        async function debugGenerate() {
+            try {
+                showStatus('🔍 Running debug generation...', 'info');
+                
+                const response = await fetch('http://localhost:3000/api/debug-generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    let message = `✅ Debug Generation Successful<br>`;
+                    message += `📊 Buffer Size: ${data.bufferSize} bytes<br>`;
+                    message += `💾 Output File: ${data.outputPath}<br>`;
+                    message += `🎯 Check your server directory for debug_output.docx`;
+                    
+                    showStatus(message, 'success');
+                } else {
+                    showStatus(`❌ Debug Failed: ${data.error || 'Unknown error'}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Debug Error: ${error.message}`, 'error');
+            }
+        }
+
+        // Basic document generation
+        async function generateDocuments(formData) {
+            try {
+                showStatus('📝 Generating documents...', 'info');
+                
+                const response = await fetch('http://localhost:3000/api/generate-documents', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(formData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate documents');
+                }
+
+                await handleDownload(response, formData.name);
+                
+            } catch (error) {
+                console.error('❌ Generation failed:', error);
+                showStatus(`❌ Generation failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Custom order generation
+        async function generateCustomOrder(formData) {
+            try {
+                showStatus('📝 Generating custom order documents...', 'info');
+                
+                const requestData = {
+                    ...formData,
+                    documentOrder: documentOrder,
+                    uploadedDocuments: []
+                };
+                
+                const response = await fetch('http://localhost:3000/api/generate-documents-with-custom-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate custom order documents');
+                }
+
+                await handleDownload(response, formData.name, 'custom_order');
+                
+            } catch (error) {
+                console.error('❌ Custom order generation failed:', error);
+                showStatus(`❌ Custom order generation failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Upload and split generation
+        async function generateWithUploads(formData) {
+            try {
+                showStatus('📝 Generating documents with uploads...', 'info');
+                
+                const requestData = {
+                    ...formData,
+                    documentOrder: uploadDocumentOrder,
+                    uploadedDocuments: uploadedFiles
+                };
+                
+                const response = await fetch('http://localhost:3000/api/generate-documents-with-custom-order', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'Failed to generate documents with uploads');
+                }
+
+                await handleDownload(response, formData.name, 'with_uploads');
+                
+            } catch (error) {
+                console.error('❌ Upload generation failed:', error);
+                showStatus(`❌ Upload generation failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Handle download
+        async function handleDownload(response, name, suffix = '') {
+            const blob = await response.blob();
+            console.log('📦 Received blob:', blob.size, 'bytes');
+            
+            const safeName = name.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9_]/g, '');
+            const fileName = suffix ? `${safeName}_${suffix}.zip` : `${safeName}_documents.zip`;
+            
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            
+            document.body.appendChild(link);
+            link.click();
+            
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            
+            showStatus(`✅ Documents downloaded successfully!<br>📁 Check your Downloads folder for the ZIP file.<br>📦 File size: ${(blob.size / 1024).toFixed(2)} KB`, 'success');
+        }
+
+        // Form submission handlers
+        document.getElementById('basicForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.cv = parseFloat(data.cv);
+            await generateDocuments(data);
+        });
+
+        document.getElementById('customForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.cv = parseFloat(data.cv);
+            await generateCustomOrder(data);
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+            data.cv = parseFloat(data.cv);
+            await generateWithUploads(data);
+        });
+
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            checkHealth();
+            initializeCustomTab();
+            initializeUploadTab();
+        });
+    </script>
+</body>
+</html>
