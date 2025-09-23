@@ -2703,6 +2703,8 @@ app.post('/api/generate-documents-with-custom-order', async (req, res) => {
 
 // Start server with better error handling
 const PORT = process.env.PORT || 3000;
+// Get the app URL from environment variables or construct it
+const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('🚀 DOCX Template Processor Server Started');
   console.log(`📡 Server running on http://localhost:${PORT}`);
@@ -2726,6 +2728,20 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('   - Memory monitoring endpoints available');
   console.log('   GET  /api/memory - Check memory usage');
   console.log('   POST /api/memory/cleanup - Force memory cleanup');
+
+  // Set up a ping mechanism to prevent sleep mode
+  setInterval(() => {
+    try {
+      const client = APP_URL.startsWith('https:') ? https : http;
+      client.get(APP_URL, (res) => {
+        console.log(`🔄 Ping successful! Status: ${res.statusCode}`);
+      }).on('error', (err) => {
+        console.error('Ping failed:', err);
+      });
+    } catch (e) {
+      console.error('Ping setup error:', e);
+    }
+  }, 14 * 60 * 1000);
 });
 
 // Set server timeout and handle errors
