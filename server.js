@@ -8,6 +8,10 @@ import multer from "multer";
 import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import https from 'https';
+import http from 'http';
+import FormData from 'form-data';
+import AdmZip from 'adm-zip';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +19,141 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 const execAsync = promisify(exec);
+
+// iLovePDF configuration storage
+const ILOVEPDF_CONFIG_FILE = path.join(process.cwd(), 'ilovepdf_config.json');
+let ilpConfig = { 
+  publicKey: 'project_public_6ba255659b958cb6fceff3d31ede7a6a_RLQYg0d5920eb1d3c7800551da9822feff7f6',
+  secretKey: 'secret_key_34d9cdd5bc3422d4d2ff0f99043e6273_hUeiD2e16d68e4adf4653ce939c3ae1623de9'
+};
+
+function loadIlpConfig() {
+  try {
+    if (fs.existsSync(ILOVEPDF_CONFIG_FILE)) {
+      const data = fs.readFileSync(ILOVEPDF_CONFIG_FILE, 'utf8');
+      ilpConfig = JSON.parse(data);
+    }
+  } catch (e) {
+    console.warn('⚠️ Failed to load iLovePDF config:', e.message);
+  }
+}
+
+function saveIlpConfig() {
+  try {
+    fs.writeFileSync(ILOVEPDF_CONFIG_FILE, JSON.stringify(ilpConfig, null, 2));
+  } catch (e) {
+    console.warn('⚠️ Failed to save iLovePDF config:', e.message);
+  }
+}
+
+loadIlpConfig();
+
+// Simple HTTP request helper (supports JSON and FormData bodies)
+function httpRequest(url, options = {}) {
+  return new Promise((resolve, reject) => {
+    const isHttps = url.startsWith('https://');
+    const client = isHttps ? https : http;
+    const req = client.request(url, options, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(parsed);
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${parsed.message || data}`));
+          }
+        } catch {
+          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+            resolve(data);
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+          }
+        }
+      });
+    });
+    req.on('error', reject);
+    if (options.body) {
+      if (options.body instanceof FormData) {
+        options.body.pipe(req);
+      } else {
+        req.write(options.body);
+        req.end();
+      }
+    } else {
+      req.end();
+    }
+  });
+}
+
+// iLovePDF API helpers
+const ILP_BASE = 'https://api.ilovepdf.com';
+let ilpToken = null;
+let ilpTokenExpiry = 0;
+
+async function ilpAuthenticate() {
+  if (!ilpConfig.publicKey) throw new Error('iLovePDF public key not set');
+  const url = `${ILP_BASE}/v1/auth`;
+  const options = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ public_key: ilpConfig.publicKey })
+  };
+  const res = await httpRequest(url, options);
+  ilpToken = res.token;
+  ilpTokenExpiry = Date.now() + (90 * 60 * 1000); // 1.5h safety
+  return ilpToken;
+}
+
+async function ensureIlpToken() {
+  if (!ilpToken || Date.now() >= ilpTokenExpiry) {
+    await ilpAuthenticate();
+  }
+}
+
+async function ilpStartTask(tool, region = 'us') {
+  await ensureIlpToken();
+  const url = `${ILP_BASE}/v1/start/${tool}/${region}`;
+  const options = { method: 'GET', headers: { Authorization: `Bearer ${ilpToken}` } };
+  return httpRequest(url, options);
+}
+
+async function ilpUploadFile(server, taskId, filePath) {
+  await ensureIlpToken();
+  const form = new FormData();
+  form.append('task', taskId);
+  form.append('file', fs.createReadStream(filePath));
+  const url = `https://${server}/v1/upload`;
+  const options = { method: 'POST', headers: { Authorization: `Bearer ${ilpToken}`, ...form.getHeaders() }, body: form };
+  return httpRequest(url, options);
+}
+
+async function ilpProcess(server, body) {
+  await ensureIlpToken();
+  const url = `https://${server}/v1/process`;
+  const options = { method: 'POST', headers: { Authorization: `Bearer ${ilpToken}`, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  return httpRequest(url, options);
+}
+
+async function ilpDownload(server, taskId, outputPath) {
+  await ensureIlpToken();
+  const url = `https://${server}/v1/download/${taskId}`;
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(outputPath);
+    https.get(url, { headers: { Authorization: `Bearer ${ilpToken}` } }, (response) => {
+      if (response.statusCode !== 200) {
+        reject(new Error(`Download failed with status: ${response.statusCode}`));
+        return;
+      }
+      response.pipe(file);
+      file.on('finish', () => { file.close(); resolve(outputPath); });
+    }).on('error', (err) => {
+      fs.unlink(outputPath, () => {});
+      reject(err);
+    });
+  });
+}
 
 // Middleware with increased limits and timeout
 app.use(express.json({ limit: '50mb' }));
@@ -455,210 +594,125 @@ function getPreviousWeekday(date) {
   return date;
 }
 
-// Add utility function to convert DOCX to PDF using Python script with retry
-async function convertDocxToPdf(docxFilePath, pdfDir, retryCount = 0) {
+// Convert DOCX to PDF using iLovePDF (officepdf)
+async function convertDocxToPdf(docxFilePath, pdfDir) {
   try {
     const fileName = path.basename(docxFilePath, '.docx');
     const pdfFileName = `${fileName}.pdf`;
     const pdfFilePath = path.join(pdfDir, pdfFileName);
-    
-    console.log(`🔄 Converting ${fileName}.docx to PDF... (attempt ${retryCount + 1})`);
-    
-    // Call the Python script to convert DOCX to PDF
-    const pythonScript = path.join(__dirname, 'docx_to_pdf_converter.py');
-    const command = `python "${pythonScript}" "${docxFilePath}" -o "${pdfFilePath}"`;
-    
-    console.log(`🐍 Executing: ${command}`);
-    
-    try {
-      const { stdout, stderr } = await execAsync(command);
-      
-      if (stderr) {
-        console.warn(`⚠️ Python script warnings: ${stderr}`);
-      }
-      
-      if (stdout) {
-        console.log(`📄 Python output: ${stdout}`);
-      }
-    } catch (execError) {
-      // Even if the command fails due to encoding issues, check if PDF was created
-      console.warn(`⚠️ Python script execution had issues: ${execError.message}`);
-    }
-    
-    // Check if PDF file was created (regardless of script exit code)
-    if (fs.existsSync(pdfFilePath)) {
+    console.log(`🔄 Converting ${fileName}.docx to PDF via iLovePDF...`);
+
+    const { server, task, remaining_credits } = await ilpStartTask('officepdf');
+    console.log(`🔑 iLovePDF credits remaining: ${remaining_credits}`);
+    const uploaded = await ilpUploadFile(server, task, docxFilePath);
+    await ilpProcess(server, {
+      task,
+      tool: 'officepdf',
+      files: [{ server_filename: uploaded.server_filename, filename: `${fileName}.docx` }],
+      output_filename: fileName
+    });
+    await ilpDownload(server, task, pdfFilePath);
+    if (!fs.existsSync(pdfFilePath)) throw new Error('Converted PDF not found');
       const stats = fs.statSync(pdfFilePath);
-      console.log(`✅ Successfully converted to PDF: ${pdfFileName} (${stats.size} bytes)`);
+    console.log(`✅ Converted to PDF: ${pdfFileName} (${stats.size} bytes)`);
       return pdfFilePath;
-    } else {
-      // Retry up to 2 times
-      if (retryCount < 2) {
-        console.log(`🔄 Retrying conversion (attempt ${retryCount + 2})...`);
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
-        return convertDocxToPdf(docxFilePath, pdfDir, retryCount + 1);
-      } else {
-        throw new Error(`PDF file was not created after ${retryCount + 1} attempts: ${pdfFilePath}`);
-      }
-    }
-    
   } catch (error) {
-    console.error(`❌ Error converting ${path.basename(docxFilePath)} to PDF:`, error.message);
+    console.error(`❌ iLovePDF conversion error for ${path.basename(docxFilePath)}:`, error.message);
     throw error;
   }
 }
 
-// Add utility function to convert multiple DOCX files to PDF in batch
+// Convert multiple DOCX to PDF using iLovePDF (loop)
 async function convertMultipleDocxToPdf(docxFiles, pdfDir) {
   try {
     if (docxFiles.length === 0) {
       console.log('⚠️ No DOCX files to convert');
       return [];
     }
-    
-    console.log(`🔄 Converting ${docxFiles.length} DOCX files to PDF in batch...`);
-    
-    // Call the Python script to convert multiple DOCX files to PDF
-    const pythonScript = path.join(__dirname, 'docx_to_pdf_converter.py');
-    const docxFilesStr = docxFiles.map(file => `"${file}"`).join(' ');
-    const command = `python "${pythonScript}" -b ${docxFilesStr} --batch-output-dir "${pdfDir}"`;
-    
-    console.log(`🐍 Executing batch conversion: ${command}`);
-    
-    try {
-      const { stdout, stderr } = await execAsync(command);
-      
-      if (stderr) {
-        console.warn(`⚠️ Python batch script warnings: ${stderr}`);
-      }
-      
-      if (stdout) {
-        console.log(`📄 Python batch output: ${stdout}`);
-      }
-    } catch (execError) {
-      console.warn(`⚠️ Python batch script execution had issues: ${execError.message}`);
-    }
-    
-    // Check which PDF files were created
-    const pdfFiles = [];
-    for (const docxFile of docxFiles) {
-      const fileName = path.basename(docxFile, '.docx');
-      const pdfFileName = `${fileName}.pdf`;
-      const pdfFilePath = path.join(pdfDir, pdfFileName);
-      
-      if (fs.existsSync(pdfFilePath)) {
-        const stats = fs.statSync(pdfFilePath);
-        console.log(`✅ Successfully converted to PDF: ${pdfFileName} (${stats.size} bytes)`);
-        pdfFiles.push(pdfFilePath);
-      } else {
-        console.warn(`⚠️ PDF file was not created: ${pdfFileName}`);
+    console.log(`🔄 Converting ${docxFiles.length} DOCX files to PDF via iLovePDF...`);
+    const results = [];
+    for (const docx of docxFiles) {
+      try {
+        const pdf = await convertDocxToPdf(docx, pdfDir);
+        results.push(pdf);
+      } catch (e) {
+        console.warn(`⚠️ Failed to convert ${path.basename(docx)}: ${e.message}`);
       }
     }
-    
-    console.log(`✅ Batch conversion completed: ${pdfFiles.length}/${docxFiles.length} files converted`);
-    return pdfFiles;
-    
+    console.log(`✅ Batch conversion completed: ${results.length}/${docxFiles.length} files converted`);
+    return results;
   } catch (error) {
-    console.error(`❌ Error in batch PDF conversion:`, error.message);
+    console.error('❌ Error in batch PDF conversion:', error.message);
     throw error;
   }
 }
 
-// Add utility function to merge all PDF files into one combined PDF
+// Merge PDFs using iLovePDF (merge)
 async function mergeAllPdfs(pdfFiles, pdfDir) {
   try {
     if (pdfFiles.length === 0) {
       console.log('⚠️ No PDF files to merge');
       return null;
     }
-    
     const combinedPdfPath = path.join(pdfDir, 'combined_documents.pdf');
-    console.log(`🔄 Merging ${pdfFiles.length} PDF files into combined document...`);
-    
-    // Call the Python script to merge PDFs
-    const pythonScript = path.join(__dirname, 'docx_to_pdf_converter.py');
-    const pdfFilesStr = pdfFiles.map(file => `"${file}"`).join(' ');
-    const command = `python "${pythonScript}" -m ${pdfFilesStr} --merge-output "${combinedPdfPath}"`;
-    
-    console.log(`🐍 Executing merge: ${command}`);
-    
-    try {
-      const { stdout, stderr } = await execAsync(command);
-      
-      if (stderr) {
-        console.warn(`⚠️ Python merge script warnings: ${stderr}`);
-      }
-      
-      if (stdout) {
-        console.log(`📄 Python merge output: ${stdout}`);
-      }
-    } catch (execError) {
-      console.warn(`⚠️ Python merge script execution had issues: ${execError.message}`);
+    console.log(`🔄 Merging ${pdfFiles.length} PDF files via iLovePDF...`);
+    const { server, task, remaining_credits } = await ilpStartTask('merge');
+    console.log(`🔑 iLovePDF credits remaining: ${remaining_credits}`);
+    const uploaded = [];
+    for (const file of pdfFiles) {
+      const up = await ilpUploadFile(server, task, file);
+      uploaded.push({ server_filename: up.server_filename, filename: path.basename(file) });
     }
-    
-    // Check if combined PDF was created
-    if (fs.existsSync(combinedPdfPath)) {
+    await ilpProcess(server, { task, tool: 'merge', files: uploaded, output_filename: 'combined_documents' });
+    await ilpDownload(server, task, combinedPdfPath);
+    if (!fs.existsSync(combinedPdfPath)) throw new Error('Combined PDF not found');
       const stats = fs.statSync(combinedPdfPath);
-      console.log(`✅ Successfully created combined PDF: combined_documents.pdf (${stats.size} bytes)`);
+    console.log(`✅ Successfully created combined PDF (${stats.size} bytes)`);
       return combinedPdfPath;
-    } else {
-      throw new Error(`Combined PDF file was not created: ${combinedPdfPath}`);
-    }
-    
   } catch (error) {
-    console.error(`❌ Error merging PDFs:`, error.message);
+    console.error('❌ Error merging PDFs via iLovePDF:', error.message);
     throw error;
   }
 }
 
-// Add utility function to split PDF into individual pages
+// Split PDF into individual pages using iLovePDF (split)
 async function splitPdfIntoPages(pdfPath, outputDir, baseName) {
   try {
-    console.log(`🔄 Splitting PDF into individual pages: ${path.basename(pdfPath)}`);
-    
-    // Call Python script to split PDF
-    const pythonScript = path.join(__dirname, 'docx_to_pdf_converter.py');
-    const command = `python "${pythonScript}" --split-pdf "${pdfPath}" --split-output-dir "${outputDir}" --split-base-name "${baseName}"`;
-    
-    console.log(`🐍 Executing PDF split: ${command}`);
-    
-    try {
-      const { stdout, stderr } = await execAsync(command);
-      
-      if (stderr) {
-        console.warn(`⚠️ Python split script warnings: ${stderr}`);
-      }
-      
-      if (stdout) {
-        console.log(`📄 Python split output: ${stdout}`);
-      }
-    } catch (execError) {
-      console.warn(`⚠️ Python split script execution had issues: ${execError.message}`);
-    }
-    
-    // Find all generated page files
+    console.log(`🔄 Splitting PDF into individual pages via iLovePDF: ${path.basename(pdfPath)}`);
+    if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
+    const { server, task } = await ilpStartTask('split');
+    const uploaded = await ilpUploadFile(server, task, pdfPath);
+    await ilpProcess(server, {
+      task,
+      tool: 'split',
+      files: [{ server_filename: uploaded.server_filename, filename: path.basename(pdfPath) }],
+      split_mode: 'fixed_range',
+      fixed_range: 1,
+      output_filename: `${baseName}_page_{n}`,
+      packaged_filename: `${baseName}_pages`
+    });
+    const zipPath = path.join(outputDir, `${baseName}_pages.zip`);
+    await ilpDownload(server, task, zipPath);
+    // Extract zip
+    const zip = new AdmZip(zipPath);
+    zip.extractAllTo(outputDir, true);
+    fs.unlinkSync(zipPath);
+    const entries = fs.readdirSync(outputDir).filter(f => f.toLowerCase().endsWith('.pdf'));
     const pageFiles = [];
-    let pageNum = 1;
-    
-    while (true) {
-      const pageFile = path.join(outputDir, `${baseName}_page_${pageNum}.pdf`);
-      if (fs.existsSync(pageFile)) {
+    for (const file of entries) {
+      const match = file.match(/_(?:page_)?(\d+)\.pdf$/i);
+      const pageNumber = match ? parseInt(match[1], 10) : undefined;
         pageFiles.push({
-          path: pageFile,
-          name: `${baseName}_page_${pageNum}.pdf`,
-          pageNumber: pageNum,
+        path: path.join(outputDir, file),
+        name: file,
+        pageNumber: pageNumber || pageFiles.length + 1,
           type: 'split_page'
         });
-        pageNum++;
-      } else {
-        break;
       }
-    }
-    
     console.log(`✅ Successfully split PDF into ${pageFiles.length} pages`);
-    return pageFiles;
-    
+    return pageFiles.sort((a, b) => (a.pageNumber || 0) - (b.pageNumber || 0));
   } catch (error) {
-    console.error(`❌ Error splitting PDF:`, error.message);
+    console.error('❌ Error splitting PDF via iLovePDF:', error.message);
     throw error;
   }
 }
@@ -1178,6 +1232,67 @@ async function getNextNSIAPolicyNumber() {
 }
 
 // API Endpoints
+// iLovePDF config endpoints
+app.post('/api/ilp/config', (req, res) => {
+  try {
+    const { publicKey, secretKey } = req.body || {};
+    if (!publicKey) return res.status(400).json({ error: 'publicKey is required' });
+    ilpConfig.publicKey = publicKey;
+    if (typeof secretKey === 'string') ilpConfig.secretKey = secretKey; // not used by JWT flow, stored for completeness
+    saveIlpConfig();
+    ilpToken = null;
+    ilpTokenExpiry = 0;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Alias POST route for compatibility
+app.post('/ilp/config', (req, res) => {
+  try {
+    const { publicKey, secretKey } = req.body || {};
+    if (!publicKey) return res.status(400).json({ error: 'publicKey is required' });
+    ilpConfig.publicKey = publicKey;
+    if (typeof secretKey === 'string') ilpConfig.secretKey = secretKey;
+    saveIlpConfig();
+    ilpToken = null;
+    ilpTokenExpiry = 0;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/ilp/config', (req, res) => {
+  res.json({ publicKey: ilpConfig.publicKey, hasSecretKey: Boolean(ilpConfig.secretKey) });
+});
+
+// GET fallback to set config via query params (for environments where POST might be blocked)
+// Example: /api/ilp/config/set?publicKey=pk_xxx&secretKey=sk_xxx
+app.get('/api/ilp/config/set', (req, res) => {
+  try {
+    const { publicKey, secretKey } = req.query || {};
+    if (!publicKey) return res.status(400).json({ error: 'publicKey is required' });
+    ilpConfig.publicKey = String(publicKey);
+    if (typeof secretKey === 'string') ilpConfig.secretKey = String(secretKey);
+    saveIlpConfig();
+    ilpToken = null;
+    ilpTokenExpiry = 0;
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.get('/api/ilp/credits', async (req, res) => {
+  try {
+    const info = await ilpStartTask('merge');
+    res.json({ remainingCredits: info.remaining_credits });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 app.get('/api/current-policy-number', async (req, res) => {
   try {
     console.log('🔍 Checking current policy number...');
@@ -1837,9 +1952,13 @@ app.get('/api/health', (req, res) => {
     },
     allFiles: fs.existsSync(templatesDir) ? fs.readdirSync(templatesDir) : [],
     pdfConversion: {
-      pythonScript: pythonScript,
-      scriptExists: fs.existsSync(pythonScript),
-      description: 'DOCX to PDF conversion using Python script'
+      provider: 'iLovePDF API',
+      configured: Boolean(ilpConfig.publicKey),
+      endpoints: {
+        setConfig: '/api/ilp/config',
+        getCredits: '/api/ilp/credits'
+      },
+      description: 'DOCX->PDF, merge, split via iLovePDF'
     }
   });
 });
@@ -1873,7 +1992,7 @@ app.post('/api/split-pdf', async (req, res) => {
     
     console.log(`📄 Saved uploaded PDF: ${fileName}`);
     
-    // Split PDF into pages
+    // Split PDF into pages via iLovePDF
     const baseName = path.basename(fileName, '.pdf');
     const splitPages = await splitPdfIntoPages(filePath, splitDir, baseName);
     
@@ -2598,10 +2717,9 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('\n📁 Required template files in ./templates/ directory:');
   TEMPLATE_FILES.forEach(file => console.log(`   - ${file}`));
   console.log('\n🐍 PDF Conversion:');
-  console.log('   - Uses Python script: docx_to_pdf_converter.py');
-  console.log('   - Requires python-docx2pdf and PyPDF2 libraries');
-  console.log('   - Generates individual DOCX and PDF versions');
-  console.log('   - Creates combined PDF with all documents');
+  console.log('   - Uses iLovePDF API for DOCX->PDF, merge, split');
+  console.log('   - Configure keys via /api/ilp/config');
+  console.log('   - Check credits via /api/ilp/credits');
   console.log('\n🧠 Memory Management:');
   console.log('   - Template caching enabled');
   console.log('   - Automatic memory cleanup every 5 minutes');

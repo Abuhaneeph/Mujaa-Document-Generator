@@ -22,6 +22,8 @@
     "docxtemplater": "^3.66.3",
     "express": "^5.1.0",
     "multer": "^2.0.2",
-    "pizzip": "^3.2.0"
+    "pizzip": "^3.2.0",
+    "form-data": "^4.0.0",
+    "adm-zip": "^0.5.10"
   }
 }
