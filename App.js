@@ -42,6 +42,7 @@ const DocumentGenerator = () => {
   const [ilpSecretKey, setIlpSecretKey] = useState('');
   const [ilpCredits, setIlpCredits] = useState(null);
   const [isSavingIlp, setIsSavingIlp] = useState(false);
+  const [thumbnails, setThumbnails] = useState({}); // id -> dataURL
 
   // Predefined pension companies and their addresses
   const pensionCompanies = {
@@ -75,8 +76,8 @@ const DocumentGenerator = () => {
     'KEBBI STATE HOME SAVINGS & LOANS LTD': 'PLOT 24, AHMADU BELLO WAY, BIRNIN KEBBI, KEBBI STATE',
   };
 
-  //const apiUrl = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://yourdomain.com');
-  const apiUrl = 'https://mujaa-document-generator.onrender.com';
+  const apiUrl = import.meta.env.VITE_API_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3000' : 'https://yourdomain.com');
+  //const apiUrl = 'https://mujaa-document-generator.onrender.com';
 
 
 
@@ -110,6 +111,68 @@ const DocumentGenerator = () => {
       return '';
     }
   };
+
+  // Load pdf.js from CDN once
+  let pdfJsLoadingPromise = null;
+  const loadPdfJsOnce = () => {
+    if (window.pdfjsLib) return Promise.resolve(window.pdfjsLib);
+    if (pdfJsLoadingPromise) return pdfJsLoadingPromise;
+    pdfJsLoadingPromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      script.onload = () => {
+        try {
+          window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+          resolve(window.pdfjsLib);
+        } catch (e) { reject(e); }
+      };
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    return pdfJsLoadingPromise;
+  };
+
+  // Generate thumbnail (PNG) for a single-page PDF data URL
+  const generatePdfThumbnail = async (pdfDataUrl, maxWidth = 320) => {
+    const pdfjsLib = await loadPdfJsOnce();
+    const base64 = pdfDataUrl.split(',')[1] || '';
+    const binary = atob(base64);
+    const len = binary.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) bytes[i] = binary.charCodeAt(i);
+    const pdf = await pdfjsLib.getDocument({ data: bytes }).promise;
+    const page = await pdf.getPage(1);
+    const viewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(1, maxWidth / viewport.width);
+    const scaledViewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = Math.ceil(scaledViewport.width);
+    canvas.height = Math.ceil(scaledViewport.height);
+    await page.render({ canvasContext: ctx, viewport: scaledViewport }).promise;
+    return canvas.toDataURL('image/png');
+  };
+
+  // Ensure thumbnails exist for provided pages
+  const ensureThumbnailsForPages = async (pages) => {
+    const toRender = pages.filter(p => p.previewData && !thumbnails[p.id]);
+    if (toRender.length === 0) return;
+    for (const p of toRender) {
+      try {
+        const dataUrl = await generatePdfThumbnail(p.previewData, 320);
+        setThumbnails(prev => ({ ...prev, [p.id]: dataUrl }));
+      } catch (e) {
+        // Ignore rendering errors; fallback to open button
+      }
+    }
+  };
+
+  // Auto-generate thumbnails when splitPages change
+  useEffect(() => {
+    if (splitPages && splitPages.length > 0) {
+      ensureThumbnailsForPages(splitPages);
+    }
+  }, [splitPages]);
 
   useEffect(() => {
     checkHealth();
@@ -482,6 +545,8 @@ const DocumentGenerator = () => {
       
       // Add split pages to state (document order will be updated by useEffect)
       setSplitPages(prev => [...prev, ...data.pages]);
+      // Generate thumbnails for previews (mobile-friendly)
+      ensureThumbnailsForPages(data.pages);
       
       // Auto-enable preview for all split pages
       if (autoPreviewSplitPages) {
@@ -682,14 +747,20 @@ const DocumentGenerator = () => {
     const generatedDocsList = [...baseGeneratedDocs];
     if (formData.mortgageBank && formData.mortgageBank.toLowerCase().includes('jigawa')) {
       generatedDocsList.push('pension_cert');
+      generatedDocsList.push('kbl_insurance'); // KBL insurance for Jigawa
       generatedDocsList.push('nsia_insurance'); // NSIA is for Jigawa
       generatedDocsList.push('mujaa_offer_letter'); // MUJAA offer letter for Jigawa
       generatedDocsList.push('valuation_report'); // Valuation report for Jigawa
+      generatedDocsList.push('rangaza_c_of_o'); // Rangaza C of O for Jigawa
+      generatedDocsList.push('rangaza_deed_of_assignment'); // Rangaza deed for Jigawa
     } else if (formData.mortgageBank && formData.mortgageBank.toLowerCase().includes('kebbi')) {
       generatedDocsList.push('kbl_insurance'); // KBL is for Kebbi
+      generatedDocsList.push('nsia_insurance'); // NSIA insurance for Kebbi
       generatedDocsList.push('mujaa_offer_letter'); // MUJAA offer letter for Kebbi
       generatedDocsList.push('valuation_report'); // Valuation report for Kebbi
       generatedDocsList.push('clearance_cert'); // Clearance certificate for Kebbi
+      generatedDocsList.push('rangaza_c_of_o'); // Rangaza C of O for Kebbi
+      generatedDocsList.push('rangaza_deed_of_assignment'); // Rangaza deed for Kebbi
     }
 
     const generatedDocs = generatedDocsList.map((docName, index) => ({
@@ -1833,12 +1904,14 @@ const DocumentGenerator = () => {
                             {viewMode === 'grid' ? (
                               <div className="aspect-[3/4] flex flex-col">
                                 <div className="flex-1 bg-gray-100 flex items-center justify-center">
-                                  {item.isSplitPage && showPreview[item.id] ? (
-                                    <iframe
-                                      src={item.previewData}
-                                      className="w-full h-full border-0"
-                                      title={`Page ${item.pageNumber} preview`}
-                                    />
+                                  {item.isSplitPage ? (
+                                    thumbnails[item.id] ? (
+                                      <img src={thumbnails[item.id]} alt={`Page ${item.pageNumber} preview`} className="w-full h-full object-contain" />
+                                    ) : item.previewData ? (
+                                      <iframe src={item.previewData} className="w-full h-full border-0" title={`Page ${item.pageNumber} preview`} />
+                                    ) : (
+                                      <div className="text-center text-gray-500 p-4">Preview unavailable</div>
+                                    )
                                   ) : item.isGenerated ? (
                                     <div className="text-center text-gray-500 p-4">
                                       <FileText className="w-8 h-8 mx-auto mb-2" />
@@ -1883,12 +1956,14 @@ const DocumentGenerator = () => {
                             ) : (
                               <>
                                 <div className="w-16 h-20 bg-gray-100 rounded flex items-center justify-center flex-shrink-0">
-                                  {item.isSplitPage && showPreview[item.id] ? (
-                                    <iframe
-                                      src={item.previewData}
-                                      className="w-full h-full border-0 rounded"
-                                      title={`Page ${item.pageNumber} preview`}
-                                    />
+                                  {item.isSplitPage ? (
+                                    thumbnails[item.id] ? (
+                                      <img src={thumbnails[item.id]} alt={`Page ${item.pageNumber} preview`} className="w-full h-full object-contain rounded" />
+                                    ) : item.previewData ? (
+                                      <iframe src={item.previewData} className="w-full h-full border-0 rounded" title={`Page ${item.pageNumber} preview`} />
+                                    ) : (
+                                      <FileText className="w-6 h-6 text-gray-400" />
+                                    )
                                   ) : (
                                     <FileText className="w-6 h-6 text-gray-400" />
                                   )}

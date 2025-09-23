@@ -193,6 +193,10 @@ const BANK_SPECIFIC_TEMPLATES = [
 ];
 
 const JIGAWA_SPECIFIC_TEMPLATES = [
+  'kbl_insurance.docx' // DOCX template for Jigawa (needs placeholder replacement)
+];
+
+const JIGAWA_SPECIFIC_PDFS = [
   'pension_cert.pdf', // PDF file for Jigawa (no placeholders)
   'rangaza_c_of_o.pdf',
   'rangaza_deed_of_assignment.pdf'
@@ -200,6 +204,7 @@ const JIGAWA_SPECIFIC_TEMPLATES = [
 
 const KBL_SPECIFIC_TEMPLATES = [
   'kbl_insurance.docx',
+  'nsia_insurance.docx',
   'mujaa_offer_letter.docx',
   'valuation_report.docx'
 ];
@@ -412,7 +417,7 @@ function formatDate(date = new Date()) {
 
 // Calculate property details based on CV
 function calculatePropertyDetails(cv) {
-  // First calculate equity amount and truncate to 2 decimal places
+  // Calculate equity amount and truncate to 2 decimal places
   const equityAmount = Math.floor((cv / 4) * 100) / 100;
   const minLoanAmount = 500000;
   const maxLoanAmount = 2500000;
@@ -424,50 +429,18 @@ function calculatePropertyDetails(cv) {
     // For high equity amounts, round property to nearest million
     const targetProperty = Math.ceil((equityAmount + minLoanAmount) / 1000000) * 1000000;
     propertyAmount = Math.floor(targetProperty * 100) / 100; // Truncate to 2 decimal places
-    
-    // Calculate loan amount and ROUND UP to ensure property amount adds up correctly
-    const loanAmountRaw = propertyAmount - equityAmount;
-    loanAmount = Math.ceil(loanAmountRaw * 100) / 100; // ROUND UP to 2 decimal places
-    
-    // Ensure loan amount is within limits
-    if (loanAmount > maxLoanAmount) {
-      loanAmount = Math.floor(maxLoanAmount * 100) / 100; // Truncate to 2 decimal places
-      propertyAmount = Math.floor((equityAmount + loanAmount) * 100) / 100; // Recalculate property
-    }
   } else {
     // For lower equity amounts, ensure property amount is exactly minPropertyAmount
     propertyAmount = minPropertyAmount; // Exactly 3,000,000.00
-    
-    // Calculate loan amount and ROUND UP to ensure property amount adds up correctly
-    const loanAmountRaw = propertyAmount - equityAmount;
-    loanAmount = Math.ceil(loanAmountRaw * 100) / 100; // ROUND UP to 2 decimal places
-    
-    // Ensure loan amount is within limits
-    if (loanAmount > maxLoanAmount) {
-      loanAmount = Math.floor(maxLoanAmount * 100) / 100; // Truncate to 2 decimal places
-      propertyAmount = Math.floor((equityAmount + loanAmount) * 100) / 100; // Recalculate property
-    }
   }
   
-  // For minimum property cases, ensure property amount is exactly 3,000,000.00
-  if (propertyAmount === minPropertyAmount) {
-    // Calculate loan amount to make the total exactly 3,000,000.00
-    const targetPropertyCents = 300000000; // 3,000,000.00 in cents
-    const equityCents = Math.floor(equityAmount * 100);
-    const loanCents = targetPropertyCents - equityCents;
-    
-    loanAmount = Math.floor(loanCents) / 100;
-    propertyAmount = minPropertyAmount; // Keep exactly 3,000,000.00
-  } else {
-    // For all other cases, ensure property amount equals equity + loan (with rounding)
-    // Recalculate property amount to ensure it matches equity + loan
-    const equityCents = Math.floor(equityAmount * 100);
-    const loanCents = Math.floor(loanAmount * 100);
-    const propertyCents = equityCents + loanCents;
-    
-    // Convert back to decimal
-    propertyAmount = Math.floor(propertyCents) / 100;
-    loanAmount = Math.floor(loanCents) / 100;
+  // Calculate loan amount by simple subtraction: loanAmount = propertyAmount - equityAmount
+  loanAmount = Math.floor((propertyAmount - equityAmount) * 100) / 100;
+  
+  // Ensure loan amount is within limits
+  if (loanAmount > maxLoanAmount) {
+    loanAmount = Math.floor(maxLoanAmount * 100) / 100;
+    propertyAmount = Math.floor((equityAmount + loanAmount) * 100) / 100;
   }
   
   // Calculate number of bedrooms
@@ -1686,7 +1659,7 @@ const templateData = {
       
       const templatesDir = path.join(__dirname, 'templates');
       
-      for (const pdfFile of JIGAWA_SPECIFIC_TEMPLATES) {
+      for (const pdfFile of JIGAWA_SPECIFIC_PDFS) {
         const pdfPath = path.join(templatesDir, 'jigawa', pdfFile);
         
         try {
@@ -2446,7 +2419,7 @@ app.post('/api/generate-documents-with-custom-order', async (req, res) => {
       
       const templatesDir = path.join(__dirname, 'templates');
       
-      for (const pdfFile of JIGAWA_SPECIFIC_TEMPLATES) {
+      for (const pdfFile of JIGAWA_SPECIFIC_PDFS) {
         const pdfPath = path.join(templatesDir, 'jigawa', pdfFile);
         
         try {
