@@ -2673,13 +2673,74 @@ app.post('/api/generate-documents-with-custom-order', async (req, res) => {
 
 
 // Start server with better error handling
-const PORT = process.env.PORT || 3000;
+// For cPanel, use environment variable PORT or fallback to common ports
+const PORT = process.env.PORT || process.env.NODE_PORT || 3000;
 // Get the app URL from environment variables or construct it
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
-const server = app.listen(PORT, '0.0.0.0', () => {
-  console.log('🚀 DOCX Template Processor Server Started');
-  console.log(`📡 Server running on http://localhost:${PORT}`);
-  console.log(`📡 Server also accessible via http://0.0.0.0:${PORT}`);
+
+// Function to find available port
+function findAvailablePort(startPort, callback) {
+  const server = require('net').createServer();
+  
+  server.listen(startPort, () => {
+    const port = server.address().port;
+    server.close(() => {
+      callback(null, port);
+    });
+  });
+  
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      findAvailablePort(startPort + 1, callback);
+    } else {
+      callback(err);
+    }
+  });
+}
+
+// For cPanel deployment, try direct port first, then fallback to port detection
+if (process.env.NODE_ENV === 'production' || process.env.CPANEL) {
+  // In production/cPanel, try the specified port first
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log('🚀 DOCX Template Processor Server Started (Production Mode)');
+    console.log(`📡 Server running on port ${PORT}`);
+    console.log('📋 Available endpoints:');
+    console.log('   POST /api/generate-documents - Generate processed documents');
+    console.log('   GET  /api/health - Check server status');
+    console.log('   GET  /api/memory - Check memory usage');
+  });
+
+  server.on('error', (error) => {
+    if (error.code === 'EADDRINUSE') {
+      console.log(`⚠️ Port ${PORT} is in use, trying port detection...`);
+      // Fallback to port detection
+      findAvailablePort(PORT + 1, (err, availablePort) => {
+        if (err) {
+          console.error('❌ Could not find available port:', err);
+          process.exit(1);
+        }
+        startServerOnPort(availablePort);
+      });
+    } else {
+      console.error('🚨 Server error:', error);
+    }
+  });
+} else {
+  // Development mode - use port detection
+  findAvailablePort(PORT, (err, availablePort) => {
+    if (err) {
+      console.error('❌ Could not find available port:', err);
+      process.exit(1);
+    }
+    startServerOnPort(availablePort);
+  });
+}
+
+function startServerOnPort(port) {
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log('🚀 DOCX Template Processor Server Started');
+    console.log(`📡 Server running on http://localhost:${port}`);
+    console.log(`📡 Server also accessible via http://0.0.0.0:${port}`);
   console.log('📋 Available endpoints:');
   console.log('   POST /api/generate-documents - Generate processed documents (DOCX + PDF + Combined PDF)');
   console.log('   POST /api/generate-documents-with-custom-order - Generate documents with custom ordering and uploaded PDFs');
@@ -2700,34 +2761,35 @@ const server = app.listen(PORT, '0.0.0.0', () => {
   console.log('   GET  /api/memory - Check memory usage');
   console.log('   POST /api/memory/cleanup - Force memory cleanup');
 
-  // Set up a ping mechanism to prevent sleep mode
-  setInterval(() => {
-    try {
-      const client = APP_URL.startsWith('https:') ? https : http;
-      client.get(APP_URL, (res) => {
-        console.log(`🔄 Ping successful! Status: ${res.statusCode}`);
-      }).on('error', (err) => {
-        console.error('Ping failed:', err);
-      });
-    } catch (e) {
-      console.error('Ping setup error:', e);
-    }
-  }, 5 * 60 * 1000);
-});
+    // Set up a ping mechanism to prevent sleep mode
+    setInterval(() => {
+      try {
+        const client = APP_URL.startsWith('https:') ? https : http;
+        client.get(APP_URL, (res) => {
+          console.log(`🔄 Ping successful! Status: ${res.statusCode}`);
+        }).on('error', (err) => {
+          console.error('Ping failed:', err);
+        });
+      } catch (e) {
+        console.error('Ping setup error:', e);
+      }
+    }, 5 * 60 * 1000);
+  });
 
-// Set server timeout and handle errors
-server.setTimeout(300000); // 5 minutes
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
+  // Set server timeout and handle errors
+  server.setTimeout(300000); // 5 minutes
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
 
-server.on('error', (error) => {
-  console.error('🚨 Server error:', error);
-});
+  server.on('error', (error) => {
+    console.error('🚨 Server error:', error);
+  });
 
-server.on('clientError', (err, socket) => {
-  console.error('🚨 Client error:', err);
-  socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
-});
+  server.on('clientError', (err, socket) => {
+    console.error('🚨 Client error:', err);
+    socket.end('HTTP/1.1 400 Bad Request\r\n\r\n');
+  });
+}
 
 // Memory monitoring endpoint
 app.get('/api/memory', (req, res) => {
