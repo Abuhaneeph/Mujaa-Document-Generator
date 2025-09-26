@@ -1,7 +1,7 @@
-import fs from "fs";
-import path from "path";
-import PizZip from "pizzip";
-import Docxtemplater from "docxtemplater";
+const fs = require("fs");
+const path = require("path");
+const PizZip = require("pizzip");
+const Docxtemplater = require("docxtemplater");
 
 // Function to fix placeholders in existing template while preserving content
 function fixExistingTemplate() {

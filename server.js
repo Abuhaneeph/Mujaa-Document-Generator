@@ -1,20 +1,18 @@
-import fs from "fs";
-import path from "path";
-import PizZip from "pizzip";
-import Docxtemplater from "docxtemplater";
-import archiver from "archiver";
-import express from "express";
-import multer from "multer";
-import { fileURLToPath } from 'url';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import https from 'https';
-import http from 'http';
-import FormData from 'form-data';
-import AdmZip from 'adm-zip';
+const fs = require("fs");
+const path = require("path");
+const PizZip = require("pizzip");
+const Docxtemplater = require("docxtemplater");
+const archiver = require("archiver");
+const express = require("express");
+const multer = require("multer");
+const { exec } = require('child_process');
+const { promisify } = require('util');
+const https = require('https');
+const http = require('http');
+const FormData = require('form-data');
+const AdmZip = require('adm-zip');
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// __filename and __dirname are available in CommonJS by default
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
@@ -2714,7 +2712,7 @@ const server = app.listen(PORT, '0.0.0.0', () => {
     } catch (e) {
       console.error('Ping setup error:', e);
     }
-  }, 14 * 60 * 1000);
+  }, 5 * 60 * 1000);
 });
 
 // Set server timeout and handle errors
@@ -2805,4 +2803,4 @@ app.post('/api/memory/cleanup', (req, res) => {
   }
 });
 
-export default app;
+module.exports = app;
